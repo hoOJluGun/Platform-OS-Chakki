@@ -1,0 +1,6 @@
+{
+  "name": "Chakki Studio - Factory Agent Platform",
+  "description": "Clean-room AI Agent Studio and cross-platform desktop UI with JSON-RPC Swift engine bridge, reasoning stream, tool approval flow, and diff editor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

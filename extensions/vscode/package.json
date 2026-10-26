@@ -1,0 +1,53 @@
+{
+  "name": "chakki-studio",
+  "displayName": "Chakki Studio - Autonomous AI Agent",
+  "description": "Thin client for Chakki Canonical Engine over JSON-RPC 2.0",
+  "version": "2.0.0",
+  "publisher": "chakki-ai",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["AI", "Programming Languages", "Machine Learning"],
+  "activationEvents": ["onView:chakki.activityView"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "chakki-sidebar",
+          "title": "Chakki",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "chakki-sidebar": [
+        {
+          "type": "webview",
+          "id": "chakki.activityView",
+          "name": "Chakki Agent"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "chakki.startTask",
+        "title": "Chakki: Start Task"
+      },
+      {
+        "command": "chakki.doctor",
+        "title": "Chakki: Run Diagnostics"
+      }
+    ],
+    "configuration": {
+      "title": "Chakki Engine",
+      "properties": {
+        "chakki.engineUrl": {
+          "type": "string",
+          "default": "ws://127.0.0.1:8765",
+          "description": "WebSocket endpoint of Chakki Canonical Engine"
+        }
+      }
+    }
+  }
+}

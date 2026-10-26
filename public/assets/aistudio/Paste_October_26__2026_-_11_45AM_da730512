@@ -1,0 +1,962 @@
+CHAKKI DIRECTOR DIRECTIVE — REAL PRODUCT QUALIFICATION v3.0
+PRODUCT: CHAKKI
+SCOPE: REAL ENGINE + KILO GATEWAY + CLI/TUI + DESKTOP + WEB + VSIX + JETBRAINS
+
+ROLE
+Ты — ведущий инженер Chakki. Оператор — владелец продукта. Архитектурные
+решения, критерии приёмки и правила безопасности определены ниже.
+
+Твоя задача — не написать ещё один впечатляющий README или нарисовать
+прототип, а провести аудит текущего проекта, устранить ложную готовность
+и реализовать максимально возможный объём настоящего продукта.
+
+Продолжай работу в текущем проекте. Не создавай новые копии проекта.
+Не переписывай полезный код с нуля ради красивой структуры.
+Не объявляй готовность, пока фактический результат не подтверждён.
+
+======================================================================
+0. НЕИЗМЕНЯЕМЫЕ РЕШЕНИЯ ПРОДУКТА
+======================================================================
+
+Каноническое название: Chakki.
+Канонический бренд интерфейса: Chakki.
+Канонический терминальный продукт: Chakki CLI.
+Каноническое desktop-приложение: Chakki Studio.
+
+ПРОДУКТОВАЯ СЕМЬЯ:
+1. Engine — единственный исполнительный контур.
+2. CLI/TUI — полноценный терминальный клиент.
+3. Desktop — полноценное приложение с простым и расширенным режимами.
+4. Website — главная страница и страница установки, документация, загрузки.
+5. VS Code / VS Code Insiders — тонкий клиент через протокол Engine.
+6. JetBrains — тонкий клиент через тот же протокол.
+7. Web/Cloud Agent — самостоятельный удалённый режим только после появления
+   реального серверного runtime и изоляции задач.
+8. Windows/Linux/mobile — только с фактической платформенной реализацией,
+   сборками и тестами.
+
+Не создавать отдельный агентный движок для каждого клиента.
+
+Desktop, VS Code и JetBrains не должны иметь собственные циклы модели,
+парсеры tool calls, независимые permissions или альтернативную реализацию
+агентной оркестрации. Они отображают события и передают команды Engine.
+
+Swift-код является реальным backend только в том случае, если его процесс
+действительно запускается и выполняет запросы.
+
+Наличие файла EngineServer.swift, названия «Local Daemon» или статуса
+«Engine: Ready» не является доказательством запуска Swift-процесса.
+
+Модельный провайдер первого класса — Kilo AI Gateway.
+Модели обнаруживаются динамически. Free-маршруты используются только в
+соответствии с актуальным каталогом и условиями шлюза.
+
+Никаких встроенных ответов модели, фиктивных tool calls, синтетического
+применения патча или mockEngine на production-пути.
+
+======================================================================
+1. P0 — НЕМЕДЛЕННО РАССЛЕДОВАТЬ ФЕЙКОВЫЙ ОТВЕТ
+======================================================================
+
+Это первый блокер. Пока он не разрешён, нельзя считать агент работающим.
+
+На экране Chakki Studio отображались:
+- Engine: Ready;
+- Chakki Swift Core (Local Daemon);
+- Extended Thinking & Invariant Checks;
+- Awaiting Operator Approval;
+- предложение file_patch;
+- успешное завершение тестирования.
+
+Оператор фактически получил ответ, который оказался mock/demo вместо
+ожидаемого ответа модели через Kilo Gateway.
+
+Считай это подтверждённым пользовательским дефектом до расследования.
+
+A. Проследи реальный путь отправки сообщения:
+
+Composer
+ -> обработчик Submit
+ -> API/client
+ -> фактический backend
+ -> ModelProvider
+ -> HTTP request to Kilo Gateway
+ -> actual HTTP status and response
+ -> actual SSE parser, if streaming
+ -> Agent Runtime
+ -> Tool Runtime, если модель реально запросила tool
+ -> persisted events
+ -> UI rendering.
+
+Для каждого перехода укажи файл, функцию и фактическую передачу данных.
+
+B. Выполни аудит исходников и конфигурации.
+
+Найди:
+- mock, Mock, mockEngine;
+- DEMO, CHAKKI_DEMO;
+- fixture, recorded response, sample response;
+- fakeSuccess, simulated, deterministic;
+- fallback answers;
+- hardcoded model response;
+- mock tool call;
+- demo diff;
+- fake command execution;
+- hardcoded "Patch applied successfully";
+- prerecorded event streams;
+- test-only fixtures, попавшие в production bundle;
+- local daemon status, выставляемый без проверки соединения;
+- scripted reasoning/progress;
+- все fallback-ветки, которые могут вернуть успешный результат без
+  настоящего backend-вызова.
+
+Не удаляй каждый mock без разбора: офлайн-тесты могут использовать fixtures.
+Но ни одна fixture или тестовый provider не должна попадать в обычный
+производственный execution path.
+
+C. Докажи, какой backend реально работает.
+
+Если окружение AI Studio не содержит Swift toolchain:
+- явно установи, какой код фактически исполняется в Node.js runtime;
+- не называй его Swift Engine;
+- не утверждай, что Swift-файлы исполнены;
+- не утверждай, что локальный daemon connected без реального handshake.
+
+Если настоящий Swift Engine уже запущен на доступном хосте, проверь реальное
+подключение и получи настоящие данные handshake.
+
+Если его нет:
+- UI обязан показывать Engine disconnected/unavailable;
+- Agent Start должен сообщать, что execution backend недоступен;
+- provider diagnostics могут отдельно проверять настоящий Kilo API через
+  поддерживаемый серверный путь;
+- нельзя выдавать provider smoke test за полноценную agent execution.
+
+Не создавать второй production-agent runtime в Node.js как скрытый fallback.
+Если архитектура текущего прототипа требует смены канонического runtime,
+сначала зафиксируй факты и точный технический blocker, затем реализуй
+согласованный протокол без двух конкурирующих движков.
+
+D. Проверь сетевую реальность.
+
+Для настоящего тестового запроса выбери актуальную бесплатную модель из
+фактически полученного каталога.
+
+Отправь уникальный запрос с nonce, требующий вернуть точную строку:
+CHAKKI_LIVE_PROVIDER_OK:<nonce>
+
+Ожидается:
+- реальный HTTP-запрос к Kilo Gateway;
+- настоящий HTTP status;
+- настоящий response body;
+- фактический model ID;
+- latency;
+- request ID, если предоставляется;
+- фактический ответ модели, совпадающий с тестовым nonce;
+- реальная трасса через parser до UI или диагностического клиента.
+
+Если запрос не выполнен, тест FAILED/BLOCKED. Никакого локального ответа
+с тем же текстом.
+
+Не публикуй credentials, cookies, токены или приватное содержимое workspace.
+
+Проверь фактическую Kilo API документацию, адреса, модельные ID, streaming
+format и правила бесплатного доступа. Не переноси устаревшие значения из
+старых README.
+
+E. Запрещённое поведение UI:
+- статус Connected без подтверждённого соединения;
+- имя модели, которое не совпадает с фактическим запросом;
+- Extended Thinking, если блок просто сгенерирован заранее;
+- tool_requested, которого не было в ответе реальной модели/планировщике;
+- exitCode 0 без запуска процесса;
+- зелёная Completed без фактического результата;
+- успешный diff preview, который никогда не применялся к диску.
+
+Сначала предоставь доказательства реальной цепочки. Затем исправляй.
+
+======================================================================
+2. P1 — ДВЕ ПОЛНОЦЕННЫЕ РЕЖИМНЫЕ ОБОЛОЧКИ
+======================================================================
+
+Текущий экран слишком перегружен для обычного пользователя.
+
+Ввести переключатель Simple / Studio.
+
+SIMPLE MODE — ВКЛЮЧЁН ПО УМОЛЧАНИЮ
+
+Цель: пользователь видит проект, диалог, поле задачи и результат.
+Не нужно заставлять его изучать внутренний протокол, ledger и 28 команд
+до первого полезного запроса.
+
+Основной layout:
+- компактная левая навигация;
+- название Chakki;
+- текущий проект и сессия;
+- история чатов;
+- центральная лента;
+- удобный composer;
+- ненавязчивый статус модели/движка;
+- реальные task/activity cards, показываемые по мере работы;
+- diff/approval UI только когда соответствующая операция существует;
+- понятное состояние отсутствия подключения;
+- быстрый переключатель Simple / Studio.
+
+Сделать полноценный empty state. Он может предлагать выбрать папку/проект,
+но не блокировать базовый чат ненужным онбордингом.
+
+Simple mode не означает отсутствие истории, памяти или инструментов.
+Это только упрощение видимого рабочего пространства.
+
+STUDIO MODE
+
+Сохраняет расширенную IDE-панель:
+- Explorer;
+- Chat / Activity Timeline;
+- Code/File Viewer;
+- Diff Review;
+- Event Ledger;
+- JSON-RPC Inspector;
+- модельный каталог;
+- команды;
+- agent orchestration dashboard.
+
+Расширенные панели должны открываться по запросу. Они не должны занимать
+всю ширину экрана в простом режиме.
+
+Сохранить чёрно-графитовую основу, сильный контраст и restrained amber/orange
+акцент, который оператор связывает с Binance.
+
+Не копировать чужие логотипы, ассеты, фирменные изображения или точные
+дизайн-элементы. Референсы нужны для качества и продуктовой иерархии.
+
+Требования:
+- адаптивность от 1280px и ниже;
+- отсутствие наложений и бессмысленной горизонтальной прокрутки;
+- keyboard-first управление;
+- корректный focus management;
+- reduced-motion support;
+- никаких декоративных spinner'ов вместо фактического статуса;
+- никаких мёртвых кнопок.
+
+Пользовательский сценарий:
+1. открыл Chakki;
+2. выбрал проект;
+3. ввёл задачу;
+4. увидел реальный статус исполнения;
+5. получил результат и diff;
+6. мог раскрыть любой tool event и проверить выполнение.
+
+Видимый прогресс — не скрытая внутренняя цепочка рассуждений модели.
+Показывай реальные task states, короткий план, имена инструментов, реальные
+входные/выходные данные, файлы, диффы и результаты проверок. Не синтезируй
+private chain-of-thought или «thinking» ради анимации.
+
+======================================================================
+3. P2 — KILO GATEWAY, МОДЕЛИ И STREAMING
+======================================================================
+
+Используй актуальный официальный источник:
+https://kilo.ai/docs/gateway/models-and-providers
+
+Каталог:
+GET https://ai-gateway.kilo.ai/api/v1/models
+
+Chat completions:
+POST https://ai-gateway.kilo.ai/api/v1/chat/completions
+
+Перед реализацией перепроверь актуальные URL и response schema в документации.
+
+ТРЕБОВАНИЯ К КАТАЛОГУ
+- реальное обнаружение моделей;
+- показывать provider/model ID;
+- показывать display name, если оно предоставлено;
+- актуальная стоимость/free status, если она доступна;
+- размер context window, если известен;
+- поддерживаемые tool calls, streaming и reasoning controls;
+- показывать cached/stale/unknown status;
+- не показывать неизвестную стоимость как нулевую;
+- не зашивать «400+ моделей» как обязательное количество;
+- не выдумывать список free models;
+- платный маршрут не использовать как бесплатный fallback.
+
+Anonymous requests разрешены только на соответствующих бесплатных маршрутах.
+Учитывать актуальные rate limits. Не обходить ограничения, не подменять
+идентичность клиента и не выдавать rate-limit failure за успешный ответ.
+
+ПРОВЕРКИ ПРОВАЙДЕРА
+1. live catalogue fetch;
+2. malformed response;
+3. no network;
+4. 429 + Retry-After;
+5. 5xx;
+6. timeout;
+7. invalid model ID;
+8. paid route rejection/insufficient balance;
+9. streaming content chunks;
+10. stream finish/error;
+11. actual tool-call serialization and parsing, where supported;
+12. cancellation and user-visible error reporting.
+
+Normal unit/integration tests use recorded transport fixtures. Live provider
+tests are separate and explicitly labelled LIVE.
+
+REASONING SELECTOR
+Показывать только реальные возможности выбранной модели.
+Если selected provider/model не поддерживает конкретный reasoning parameter,
+не отправляй его и не утверждай, что он был применён.
+
+Не переключать модель молча. Если пользователь разрешил fallback, вывести
+фактически использованный provider/model ID.
+
+PRIVACY
+Облачный режим отправляет prompt и необходимый контекст внешнему провайдеру.
+Показывать эту информацию до первого отправления контекста проекта.
+Не отправлять секреты; egress scrubber является дополнительной защитой, а
+не гарантией обнаружения всех видов confidential data.
+
+======================================================================
+4. P3 — ЕДИНЫЙ ENGINE И РЕАЛЬНЫЙ TOOL LOOP
+======================================================================
+
+Вся агентная работа идёт через единственный канонический Engine.
+
+Нет независимого AgentEngine внутри UI.
+Нет скрытого отдельного Kilo agent loop в Desktop.
+Нет второй реализации инструментов в VS Code/JetBrains.
+Нет перехода к scripted executor при недоступности LLM.
+
+Минимальный агентный путь должен быть настоящим:
+
+Start task
+ -> durable session/task creation
+ -> real provider request
+ -> parse provider response
+ -> detect actual requested tool call
+ -> validate tool schema and permission
+ -> tool request persisted
+ -> approval when required
+ -> real tool execution
+ -> persist actual output/exit code
+ -> send result back to model
+ -> continue until completion/failure/cancel
+ -> verify final result
+ -> persist terminal task state.
+
+Если модель возвращает текст без tool call, это текстовый ответ.
+Не создавать вымышленный tool call автоматически.
+
+Если модель просит tool:
+- validate schema;
+- enforce permissions;
+- record real call;
+- execute only the allowed operation;
+- return actual result.
+
+Explorer:
+- read-only;
+- scope enforced in runtime.
+
+Worker:
+- limited write scope;
+- no write outside assignment/worktree.
+
+Verifier:
+- independently verifies actual result and tests.
+
+Director:
+- owns task graph and dispatch decisions;
+- does not directly mutate user files.
+
+Parallel workers must be isolated. No two agents may silently write the same
+workspace without conflict management.
+
+Autonomy profiles:
+- Review: approval for every mutating operation;
+- Workspace Autopilot: pre-approved reversible operations inside a chosen
+  workspace and explicitly configured command policy;
+- restricted high-autonomy mode: only within an explicit target and capability
+  set.
+
+No autonomy mode grants unrestricted secret access, network access, privilege
+escalation, publication, arbitrary deletion or out-of-workspace writes.
+
+======================================================================
+5. P4 — ИСТОРИЯ, ПАМЯТЬ И TASK CONTINUITY
+======================================================================
+
+The latest 100 user-facing messages may be the default UI viewport.
+They are not the retention limit.
+
+All original messages, tool events and result records remain durably stored
+according to the documented retention contract.
+
+Do not replace raw messages with summaries.
+Do not claim that every historical message is in the active model window.
+
+Use deterministic retrieval:
+- exact message/turn/event lookup;
+- SQLite FTS5/BM25;
+- exact paths, identifiers, code symbols, version and commit indexes;
+- task/action links with provenance.
+
+No embeddings or vector database are required.
+No additional LLM call is required merely to rewrite every search query.
+
+The user must be able to:
+- open exact message 34;
+- ask what was said in message 34;
+- inspect the actual source event;
+- ask what remains unfinished from recommendations in message 107;
+- see specific action items and their actual status;
+- jump to the original recommendation, related code changes and test evidence.
+
+A task is not done because the model said "done". Done requires linked
+execution/verification evidence.
+
+Derived indexes must be rebuildable from canonical history.
+Index failure must not destroy raw records.
+Cross-session/project retrieval leaks are P0 failures.
+
+Test:
+- 100,000-event synthetic session;
+- exact early-message retrieval;
+- retrieval among distractors;
+- corrections and supersession;
+- cross-session isolation;
+- tool-output lookup;
+- corrupt index rebuild;
+- export/import integrity;
+- context budget overflow without destroying history;
+- restart/reopen;
+- false or unsupported retrieval.
+
+Report actual storage size, reopen time, lookup latency and retrieval metrics.
+Do not fabricate performance values.
+
+======================================================================
+6. P5 — WEBSITE И WEB EXPERIENCE
+======================================================================
+
+Create a polished, original Chakki website with an installation funnel inspired
+by the clarity of https://kilo.ai/install, without copying its source, assets,
+text, logo or exact branding.
+
+ROUTES:
+- /
+- /install
+- /cli
+- /desktop
+- /extensions
+- /docs
+- /security
+- /changelog
+
+A route may be omitted if it is genuinely outside the implemented release
+scope, but dead route links are forbidden.
+
+HOME:
+- concise value proposition;
+- what the product actually does;
+- evidence-based feature list;
+- screenshots generated from the real working product;
+- links to CLI, Desktop, extensions and docs;
+- no unsupported benchmark claims;
+- no claim of infinite active context;
+- no fake social proof or invented adoption numbers.
+
+INSTALL PAGE:
+Present simple, recognizable installation channels:
+- macOS;
+- Windows;
+- Linux;
+- terminal/CLI;
+- VS Code / VS Code Insiders;
+- JetBrains.
+
+Only show active download links for artifacts that exist and pass the build
+checks. Otherwise clearly label them BUILD IN PROGRESS / NOT AVAILABLE.
+No guessed release URLs, no placeholder download buttons.
+
+Separate the marketing/download website from the actual Web Agent application.
+
+A cloud Web Agent cannot claim to be operational until it has:
+- a real authenticated task API;
+- durable server-side sessions;
+- isolated execution workers;
+- repository checkout/branch isolation;
+- limits and cleanup for sandbox resources;
+- secure GitHub authorization;
+- reviewable diffs and PR creation;
+- correct secret handling and audit trail.
+
+Do not portray a browser-based local prototype as remote Cloud Agent.
+
+Cloud Web may be described as planned if the complete infrastructure cannot
+be implemented/verified in this environment.
+
+======================================================================
+7. P6 — CLI/TUI AS A REAL PRODUCT
+======================================================================
+
+The CLI must have:
+- an actual executable entry point;
+- documented install and update behavior;
+- provider/model selection;
+- interactive TUI;
+- streaming output;
+- session resume;
+- model discovery;
+- tool permissions and approvals;
+- cancellation;
+- status/doctor commands;
+- testable exit codes;
+- proper stdout/stderr separation;
+- scripts and CI integration where supported.
+
+Required command registry:
+ /help
+ /new
+ /sessions
+ /resume
+ /models
+ /agents
+ /mode
+ /plan
+ /undo
+ /redo
+ /diff
+ /search
+ /tests
+ /review
+ /doctor
+ /settings
+ /permissions
+ /mcp
+ /skills
+ /plugins
+ /hooks
+ /memory
+ /history
+ /export
+ /import
+ /status
+ /cancel
+ /quit
+
+Each command must have a real handler, permission policy, usage text, tests,
+and truthful availability metadata.
+
+No command may simply echo its name or return a fabricated success.
+If a feature is not implemented, it must not masquerade as implemented.
+
+Tests must invoke the real CLI executable as a subprocess where appropriate.
+
+Provide:
+- build instructions;
+- local installation script;
+- version output;
+- help;
+- smoke test;
+- model selection;
+- a real read-only task using a live provider when permitted.
+
+Use a maintained package-manager route only after its packaging and checksums
+are actually configured. Never pipe an unverified downloaded script directly
+into a shell as the sole installation security control.
+
+======================================================================
+8. P7 — DESKTOP APP И DISTRIBUTION
+======================================================================
+
+Retain the two-mode design from Section 2.
+
+Desktop must:
+- start/manage the real Engine process or connect to a verified existing one;
+- display its real version and health;
+- expose a true disconnected state;
+- preserve session state;
+- display real model catalog data;
+- show tool activity and output;
+- show actual diffs;
+- apply changes only through the authorized Engine;
+- update file viewer from real filesystem/events;
+- show real tests and results;
+- survive engine failure/restart without fabricating completion.
+
+PACKAGING TARGETS
+
+macOS:
+- .app;
+- .dmg;
+- .zip where useful;
+- x86_64 and Apple Silicon support if the build/dependencies permit;
+- otherwise, separate tested architecture-specific builds.
+- signing and notarization must be real, or explicitly marked not configured.
+
+Windows:
+- actual installer/executable for x64;
+- ARM64 only when built and tested on a compatible configuration;
+- no claim that a web preview constitutes a Windows desktop build.
+
+Linux:
+- build/package only supported configurations;
+- provide the necessary runtime dependencies and instructions;
+- no fabricated .deb/AppImage artifacts.
+
+Use native CI runners for each target where local cross-compilation is
+unsupported. Add release workflows and artifact manifests if possible.
+A workflow file alone does not prove a successful platform build.
+
+Every artifact must record:
+- version;
+- target OS/architecture;
+- SHA-256;
+- build command/job;
+- signing/notarization state;
+- smoke-test result.
+
+Never display a download link for an artifact that has not been created.
+
+======================================================================
+9. P8 — VS CODE / VS CODE INSIDERS VSIX
+======================================================================
+
+Create a real first-party Chakki extension as a thin client.
+
+It must:
+- identify the current workspace;
+- launch or connect to the canonical Chakki Engine;
+- use the actual protocol;
+- open a Chakki chat/activity view;
+- submit a real task;
+- show streaming task events;
+- show approval requests;
+- show actual diff/results;
+- respect Engine permission checks;
+- handle unavailable engine and protocol mismatch;
+- avoid direct Kilo model calls from its own independent agent loop.
+
+Use the actual vscode API and extension manifest.
+Add commands/contributions, activation behavior, settings and documented
+requirements.
+
+Do not create a UI that only looks like an extension while the core runs
+somewhere else without an implemented connection.
+
+Build an actual .vsix artifact using the supported packaging tool where
+dependencies are available. The official VS Code `vsce package` workflow
+produces an installable VSIX. Validate the package and install it locally
+in a compatible editor if that editor exists in the environment.
+
+Required extension smoke tests:
+- activation;
+- workspace detection;
+- start/stop Engine communication;
+- disconnected status;
+- real provider/model selection from Engine;
+- task creation;
+- event streaming;
+- approval flow;
+- diff display;
+- error handling.
+
+Do not publish to the Marketplace without explicit owner authorization.
+Local .vsix packaging is authorized.
+
+======================================================================
+10. P9 — JETBRAINS PLUGIN
+======================================================================
+
+Create a separate IntelliJ Platform plugin using the supported JetBrains
+Plugin SDK and current Gradle tooling.
+
+Official documentation:
+https://plugins.jetbrains.com/docs/intellij/
+
+The plugin must:
+- provide a Chakki tool window/chat;
+- identify the project root;
+- launch/connect to the canonical Engine;
+- use the same protocol and session/task semantics as CLI and Desktop;
+- stream real progress/output;
+- display real file diffs;
+- route approval/cancellation through the Engine;
+- respect workspace trust and security policy;
+- clearly report engine/provider failures.
+
+Do not implement another LLM loop or separate filesystem tool executor.
+
+Use current supported IntelliJ Platform Gradle Plugin tooling and the actual
+compatible IDE/Gradle/JDK version. Build the plugin distribution ZIP with
+the real Gradle task when dependencies and JDK are available.
+
+Run plugin verification/test tasks supported by the selected Gradle plugin.
+Do not claim IntelliJ compatibility from source files alone.
+
+Do not publish to JetBrains Marketplace without owner authorization.
+
+======================================================================
+11. P10 — SHARED PROTOCOL AND CLIENT CONFORMANCE
+======================================================================
+
+Establish the canonical typed protocol contract.
+
+All clients must use the same:
+- engine.initialize / capability negotiation;
+- session creation/resume;
+- task start/cancel/pause;
+- model catalogue requests;
+- event stream/cursor;
+- tool approval/rejection;
+- diff/artifact references;
+- diagnostics;
+- task completion/failure.
+
+Use strict schema validation, protocol versioning, unique request IDs, bounded
+payloads and typed errors.
+
+Maintain one authoritative schema with generated or checked client types.
+Do not maintain four slightly different copies that drift independently.
+
+The test suite must prove that:
+- CLI and Desktop can execute the same task contract;
+- VSIX and JetBrains clients call the same command semantics;
+- invalid protocol messages fail correctly;
+- a disconnected client cannot show a fake successful task;
+- event replay/resume is correct;
+- client identity and session authorization are enforced;
+- no client bypasses Engine permissions.
+
+======================================================================
+12. SECURITY
+======================================================================
+
+No claim of "unhackable" or complete safety.
+
+Define and test actual boundaries:
+- workspace root confinement;
+- symlink escape;
+- TOCTOU on file changes;
+- bounded shell subprocess execution;
+- process-group cancellation and timeouts;
+- secrets redaction;
+- no credentials in URLs, command lines, logs or event payloads;
+- session authorization;
+- per-session event isolation;
+- no cross-session memory retrieval;
+- explicit egress policy;
+- cloud privacy disclosures;
+- unsafe MCP/plugin capabilities;
+- output limits;
+- corrupted ledger/index;
+- denial-of-service limits;
+- safe patch transaction/recovery;
+- no automatic destructive actions outside approved scope.
+
+Read-only operations may be automatically allowed in a trusted workspace.
+File modifications and shell execution follow the configured permission
+profile. Autonomy is scoped, not equivalent to disabling every security gate.
+
+Retrieved historical content and tool output are untrusted data. They must
+not be promoted into system instructions or allowed to override policy.
+
+Never run destructive tests against the actual operator workspace. Use
+disposable test repositories.
+
+======================================================================
+13. TEST ARCHITECTURE
+======================================================================
+
+No single undifferentiated "19 tests passed" report for a multi-platform app.
+
+Maintain independent suites:
+
+A. protocol/unit;
+B. persistence/memory;
+C. provider/Gateway;
+D. tool runtime/security;
+E. agent loop/orchestration;
+F. CLI/TUI subprocess smoke;
+G. Desktop build/launch/integration;
+H. website/frontend;
+I. VS Code extension;
+J. JetBrains plugin;
+K. installer/package;
+L. full end-to-end;
+M. optional live Gateway smoke.
+
+Each suite must be independently invocable.
+The master verify command orchestrates them but reports each separately.
+
+Report:
+- actual individual test cases;
+- assertions separately;
+- process exit code;
+- build failures;
+- runtime crashes;
+- skipped checks;
+- live network tests;
+- artifact hashes;
+- exact source revision.
+
+Offline tests do not prove a live provider integration.
+A mocked Gateway transport does not prove Kilo is reachable.
+A Browser Playwright test does not prove Swift Engine executed.
+A compiled VSIX does not prove it can connect to the Engine.
+A generated Windows workflow does not prove an EXE was built.
+
+Every claim must use the level of evidence actually available.
+
+======================================================================
+14. REQUIRED GOLDEN JOURNEY
+======================================================================
+
+Test using a disposable repository with one harmless real source file.
+
+Task:
+"Inspect the test fixture, identify a concrete defect, propose a minimal
+correction, wait for approval, apply the change, run a real verification
+command and report the result."
+
+The flow must be:
+
+1. Real engine handshake.
+2. User starts a real task.
+3. Actual Kilo request is sent through the selected provider.
+4. Real provider response is parsed.
+5. If a tool call is requested, the actual schema is validated.
+6. Engine creates a durable tool proposal.
+7. UI shows the actual diff and approval state.
+8. Before approval, assert affected file bytes are unchanged.
+9. Reject path: assert file bytes remain unchanged.
+10. Approve path: apply exactly the approved diff.
+11. Verify resulting bytes and file hash.
+12. Execute the actual configured test command.
+13. Store actual stdout/stderr/exit code/duration.
+14. Verifier checks the evidence.
+15. UI shows truthful completion/failure.
+16. Restart engine and resume the session.
+17. Retrieve the original user request and tool result by ID.
+18. Verify the event ledger and provenance.
+
+Record the actual request path and source/response artifacts, with secrets
+redacted. The test is not passed if it silently uses a canned answer, fixture
+tool response, mockEngine or fake file mutation.
+
+If a real Swift Engine cannot run in this environment, this native golden
+journey is UNVERIFIED/BLOCKED here. Still run the real web/provider tests that
+are possible, and provide the exact macOS command needed to complete the
+native verification. Do not synthesize a passing trace.
+
+======================================================================
+15. PROOF REQUIRED AFTER EACH MAJOR PHASE
+======================================================================
+
+For every phase, return:
+
+1. Exact changed file paths.
+2. The important implementation diff or relevant code excerpts.
+3. Exact command executed.
+4. Actual exit code.
+5. Actual output or an evidence file path.
+6. Tests run and their test names.
+7. What was not verified and why.
+8. Residual risk.
+9. How the operator can reproduce the feature in 30–60 seconds.
+
+For the Kilo path, include:
+- actual model ID;
+- HTTP status;
+- elapsed time;
+- whether streaming was received;
+- actual parser path;
+- proof the UI displayed the received body;
+- whether any authorization header was sent;
+- no secret values.
+
+For tool execution, include:
+- original file hash;
+- proposed diff;
+- approval/rejection event;
+- file hash before/after;
+- command, exit code and output;
+- verifier result.
+
+For the VSIX, include:
+- extension manifest;
+- build command;
+- output artifact path and SHA-256;
+- installation/test command;
+- actual extension activation result.
+
+For JetBrains, include:
+- plugin manifest/build configuration;
+- JDK/Gradle/IDE version;
+- exact build/test command;
+- plugin ZIP path and checksum;
+- plugin verification results.
+
+For desktop installation, include per-target build commands, artifact paths,
+hashes, actual platform and signing status.
+
+======================================================================
+16. EXECUTION ORDER
+======================================================================
+
+Do not attempt to hide a broken stage by jumping to UI polish.
+
+Stage 0 — Audit the current files/runtime/dependencies.
+Stage 1 — Prove and fix the real Kilo route. Eliminate false engine status.
+Stage 2 — Real task/tool/approval journey.
+Stage 3 — Correct memory/timeline and actual historical retrieval.
+Stage 4 — Simple/Studio mode UX refinement.
+Stage 5 — CLI/TUI package and command handlers.
+Stage 6 — Website and installation funnel.
+Stage 7 — Desktop packaging and platform build workflow.
+Stage 8 — VS Code extension + VSIX.
+Stage 9 — JetBrains plugin package.
+Stage 10 — Shared protocol conformance and full offline verification.
+Stage 11 — Any live-provider verification and release audit.
+
+Complete all feasible local work autonomously.
+Do not stop after producing a plan.
+If a real blocker exists, do all safe work that does not depend on it, but
+label the blocked stage precisely and continue the remaining independent
+stages where this does not create architectural duplication.
+
+Do not invent an external artifact, test result, download URL, platform
+support claim or provider response.
+
+======================================================================
+17. FINAL REPORT
+======================================================================
+
+Return a Russian report with:
+
+A. Current repo/workspace, stack and runtime facts.
+B. Actual root cause of the observed mock answer.
+C. Exact proof of real Kilo connectivity or the concrete blocker.
+D. Real agent/tool golden journey results.
+E. Simple vs Studio UI changes and screenshot evidence.
+F. CLI command matrix: command, handler, test, status.
+G. Website routes and working install flow.
+H. Desktop packaging: platform, artifact, SHA, build/test state.
+I. VSIX artifact and local install test.
+J. JetBrains ZIP and verification result.
+K. Protocol and memory/ledger behavior.
+L. Independent test-layer results with actual cases vs assertions.
+M. Security tests and unresolved findings.
+N. Exact changed file list and diffs.
+O. All residual risks and unverified claims.
+P. Short reproducible command sequence for the operator.
+
+NEVER write "fully implemented", "production-ready" or "all tests passed"
+without evidence for the relevant claims.
+
+The key acceptance criterion is not the number of generated files.
+It is that the user can run Chakki, select a real model, send a real task,
+observe the real execution, review a real diff, approve/reject it, see real
+tool output, and recover the same durable session later.
+
+BEGIN WITH STAGE 0 NOW.

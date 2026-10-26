@@ -1,0 +1,32 @@
+<idea-plugin>
+    <id>ai.chakki.studio.plugin</id>
+    <name>Chakki Studio - Autonomous AI Agent</name>
+    <vendor email="support@chakki.ai" url="https://chakki.ai">Chakki AI</vendor>
+
+    <description><![CDATA[
+    Autonomous software engineering agent and canonical execution client for IntelliJ IDEA, WebStorm, and PyCharm.
+    Connects directly to the local Chakki Canonical Engine over JSON-RPC 2.0.
+    ]]></description>
+
+    <!-- Dependencies -->
+    <depends>com.intellij.modules.platform</depends>
+
+    <!-- Extension Points -->
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Chakki Agent"
+                    secondary="true"
+                    icon="AllIcons.General.Modified"
+                    anchor="right"
+                    factoryClass="ai.chakki.plugin.ChakkiToolWindowFactory"/>
+    </extensions>
+
+    <actions>
+        <action id="ai.chakki.plugin.StartTaskAction"
+                class="ai.chakki.plugin.StartTaskAction"
+                text="Chakki: Start Task"
+                description="Trigger Chakki Autonomous Agent Task">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="control alt C"/>
+        </action>
+    </actions>
+</idea-plugin>
